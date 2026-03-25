@@ -1,96 +1,136 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useCallback } from 'react'
-import { Info, ChevronDown, Eye, EyeOff, Volume2, Square } from 'lucide-react'
+import { Info, ChevronDown, Eye, EyeOff, Volume2, Square, Mic, MicOff, RotateCcw } from 'lucide-react'
 
-// Maps our language codes to BCP-47 locale for SpeechSynthesis
-const SPEECH_LANG = {
-  ko:    'ko-KR',
-  ja:    'ja-JP',
-  zh:    'zh-CN',
-  en:    'en-US',
-  mixed: null,   // determined at runtime
+const LOCALE_MAP = {
+  ko: 'ko-KR', ja: 'ja-JP', zh: 'zh-CN', en: 'en-US', mixed: 'ko-KR',
 }
 
+// ─── Similarity ───────────────────────────────────────────────────────────────
+function normalize(str) {
+  return str.toLowerCase().replace(/[^a-z0-9가-힣ぁ-んァ-ン\u4e00-\u9fff]/g, '')
+}
+
+function similarity(a, b) {
+  const s1 = normalize(a)
+  const s2 = normalize(b)
+  if (!s1 || !s2) return 0
+  // Build LCS length matrix
+  const dp = Array.from({ length: s1.length + 1 }, () => new Array(s2.length + 1).fill(0))
+  for (let i = 1; i <= s1.length; i++)
+    for (let j = 1; j <= s2.length; j++)
+      dp[i][j] = s1[i - 1] === s2[j - 1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1])
+  return dp[s1.length][s2.length] / Math.max(s1.length, s2.length)
+}
+
+// ─── TTS hook ─────────────────────────────────────────────────────────────────
 function useSpeech() {
   const [speaking, setSpeaking] = useState(false)
-
   const speak = useCallback((text, lang) => {
     if (!window.speechSynthesis) return
     window.speechSynthesis.cancel()
-
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang  = lang
-    utterance.rate  = 0.85   // slightly slower for learning
-    utterance.pitch = 1
-
-    utterance.onstart = () => setSpeaking(true)
-    utterance.onend   = () => setSpeaking(false)
-    utterance.onerror = () => setSpeaking(false)
-
-    window.speechSynthesis.speak(utterance)
-    setSpeaking(true)
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = lang; u.rate = 0.85
+    u.onstart = () => setSpeaking(true)
+    u.onend   = () => setSpeaking(false)
+    u.onerror = () => setSpeaking(false)
+    window.speechSynthesis.speak(u)
   }, [])
-
-  const stop = useCallback(() => {
-    window.speechSynthesis.cancel()
-    setSpeaking(false)
-  }, [])
-
+  const stop = useCallback(() => { window.speechSynthesis.cancel(); setSpeaking(false) }, [])
   return { speaking, speak, stop }
 }
 
-function SpeakButton({ line }) {
+// ─── Pronunciation practice buttons ──────────────────────────────────────────
+function PronunciationButtons({ line, onResult }) {
+  const locale  = LOCALE_MAP[line.language]
   const { speaking, speak, stop } = useSpeech()
+  const [phase, setPhase]   = useState('idle')   // idle | listening | done
+  const [score, setScore]   = useState(null)
 
-  // Decide what text to speak and in which language
-  const getLangAndText = () => {
-    const lang = line.language
-    if (lang === 'en')    return { text: line.line,      locale: 'en-US' }
-    if (lang === 'ko')    return { text: line.line,      locale: 'ko-KR' }
-    if (lang === 'ja')    return { text: line.line,      locale: 'ja-JP' }
-    if (lang === 'zh')    return { text: line.line,      locale: 'zh-CN' }
-    if (lang === 'mixed') {
-      // For mixed lines, speak the full line guessing dominant lang from romanization
-      return { text: line.line, locale: 'ko-KR' }
-    }
-    return null
-  }
+  if (!locale) return null
 
-  const payload = getLangAndText()
-  if (!payload) return null   // unknown lang — hide button
-
-  function handleClick(e) {
+  function handleSpeak(e) {
     e.stopPropagation()
     if (speaking) { stop(); return }
-    speak(payload.text, payload.locale)
+    speak(line.line, locale)
+  }
+
+  function handleMic(e) {
+    e.stopPropagation()
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) { alert('Speech recognition not supported. Use Chrome or Edge.'); return }
+
+    stop()   // stop TTS if playing
+    const rec = new SR()
+    rec.lang        = locale
+    rec.interimResults = false
+    rec.maxAlternatives = 1
+
+    setPhase('listening')
+
+    rec.onresult = (event) => {
+      const heard = event.results[0][0].transcript
+      const expected = line.line
+      const sc = similarity(heard, expected)
+      setScore(sc)
+      setPhase('done')
+      onResult(sc)
+    }
+    rec.onerror = () => setPhase('idle')
+    rec.onend   = () => { if (phase === 'listening') setPhase('idle') }
+    rec.start()
+  }
+
+  function handleReset(e) {
+    e.stopPropagation()
+    setPhase('idle')
+    setScore(null)
+    onResult(null)
   }
 
   return (
-    <motion.button
-      onClick={handleClick}
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.9 }}
-      title={speaking ? 'Stop' : 'Listen to pronunciation'}
-      style={{
-        color: speaking ? '#22d3ee' : '#6b7280',
-        lineHeight: 0,
-        transition: 'color 0.2s ease',
-      }}
-    >
-      <AnimatePresence mode="wait">
-        {speaking ? (
-          <motion.span key="stop"
-            initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
-            <Square size={13} fill="#22d3ee" />
-          </motion.span>
-        ) : (
-          <motion.span key="play"
-            initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
-            <Volume2 size={13} />
-          </motion.span>
-        )}
-      </AnimatePresence>
-    </motion.button>
+    <div className="flex items-center gap-2">
+      {/* TTS button */}
+      <motion.button onClick={handleSpeak} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+        title={speaking ? 'Stop' : 'Listen'}
+        style={{ color: speaking ? '#22d3ee' : '#6b7280', lineHeight: 0 }}>
+        <AnimatePresence mode="wait">
+          {speaking
+            ? <motion.span key="sq" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}><Square size={13} fill="#22d3ee" /></motion.span>
+            : <motion.span key="v2" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}><Volume2 size={13} /></motion.span>
+          }
+        </AnimatePresence>
+      </motion.button>
+
+      {/* Mic button */}
+      {phase === 'idle' && (
+        <motion.button onClick={handleMic} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+          title="Repeat this line" style={{ color: '#6b7280', lineHeight: 0 }}>
+          <Mic size={13} />
+        </motion.button>
+      )}
+      {phase === 'listening' && (
+        <motion.div animate={{ scale: [1, 1.2, 1], color: ['#ef4444', '#f97316', '#ef4444'] }}
+          transition={{ duration: 0.8, repeat: Infinity }} style={{ lineHeight: 0, color: '#ef4444' }}>
+          <MicOff size={13} />
+        </motion.div>
+      )}
+
+      {/* Score + reset */}
+      {phase === 'done' && score !== null && (
+        <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+          className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold"
+            style={{ color: score >= 0.6 ? '#22c55e' : '#ef4444' }}>
+            {Math.round(score * 100)}%
+          </span>
+          <motion.button onClick={handleReset} whileHover={{ scale: 1.1 }}
+            style={{ color: '#4b5563', lineHeight: 0 }} title="Try again">
+            <RotateCcw size={11} />
+          </motion.button>
+        </motion.div>
+      )}
+    </div>
   )
 }
 
@@ -167,16 +207,11 @@ function ReadingCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen })
         <p className="text-sm" style={{ color: '#9ca3af' }}>{line.translation}</p>
       )}
 
-      <div className="flex items-center justify-between mt-3">
-        <div className="flex items-center gap-1.5">
-          <motion.div
-            animate={{ boxShadow: [`0 0 3px ${emotion.color}`, `0 0 8px ${emotion.color}`, `0 0 3px ${emotion.color}`] }}
-            transition={{ duration: 2.5, repeat: Infinity }}
-            className="w-1.5 h-1.5 rounded-full" style={{ background: emotion.color }} />
-          <span className="text-xs capitalize" style={{ color: emotion.color }}>{emotion.label}</span>
+      {line.confidence < 0.5 && (
+        <div className="mt-3">
+          <span className="text-xs" style={{ color: '#374151' }}>low confidence</span>
         </div>
-        {line.confidence < 0.5 && <span className="text-xs" style={{ color: '#374151' }}>low confidence</span>}
-      </div>
+      )}
 
       <AnimatePresence>
         {noteOpen && line.cultural_note && (
@@ -198,10 +233,17 @@ function ReadingCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen })
 // ─── Practice Mode ────────────────────────────────────────────────────────────
 function PracticeCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen }) {
   const [showTranslation, setShowTranslation] = useState(false)
+  const [result, setResult] = useState(null)   // null | 0-1 score
 
-  // English-only lines have no romanization — show original as primary
-  const primary    = line.romanized || line.line
-  const hasRoman   = !!line.romanized
+  const primary  = line.romanized || line.line
+  const hasRoman = !!line.romanized
+
+  const borderColor = result === null
+    ? `${emotion.color}20`
+    : result >= 0.6 ? '#22c55e60' : '#ef444460'
+  const glowColor = result === null
+    ? `${emotion.color}14`
+    : result >= 0.6 ? '#22c55e20' : '#ef444420'
 
   return (
     <motion.div
@@ -209,32 +251,39 @@ function PracticeCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen }
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-20px' }}
       transition={{ duration: 0.35, delay: Math.min(index * 0.03, 0.3) }}
+      animate={{
+        borderColor,
+        boxShadow: result !== null ? `0 0 25px ${glowColor}` : `0 0 0px transparent`,
+      }}
       className="relative rounded-2xl px-6 py-5 group cursor-default"
       style={{
         background: 'rgba(9,9,20,0.7)',
         backdropFilter: 'blur(16px)',
-        border: `1px solid ${emotion.color}20`,
-        transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
-      }}
-      whileHover={{
-        borderColor: `${emotion.color}55`,
-        boxShadow: `0 0 30px ${emotion.color}14`,
-        transition: { duration: 0.25 },
+        border: `1px solid ${borderColor}`,
       }}
     >
-      {/* Subtle left glow bar */}
-      <div className="absolute left-0 inset-y-0 w-1 rounded-l-2xl"
-        style={{ background: `linear-gradient(to bottom, transparent, ${emotion.color}60, transparent)` }} />
+      {/* Result banner */}
+      <AnimatePresence>
+        {result !== null && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl"
+            style={{ background: result >= 0.6 ? '#22c55e' : '#ef4444' }}
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Top row: original pill + cultural note */}
+      {/* Left glow bar */}
+      <div className="absolute left-0 inset-y-0 w-1 rounded-l-2xl"
+        style={{ background: `linear-gradient(to bottom, transparent, ${result !== null ? (result >= 0.6 ? '#22c55e' : '#ef4444') : emotion.color}60, transparent)` }} />
+
+      {/* Top row */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          {/* Language badge */}
           <span className="text-xs px-2 py-0.5 rounded-full font-mono"
             style={{ background: `${langBadge.color}12`, color: `${langBadge.color}99`, border: `1px solid ${langBadge.color}20` }}>
             {langBadge.label}
           </span>
-          {/* Original text (secondary) */}
           {hasRoman && (
             <span className="text-xs" style={{ color: '#6b7280', fontFamily: "'Noto Sans KR', sans-serif" }}>
               {line.line}
@@ -242,8 +291,8 @@ function PracticeCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen }
           )}
         </div>
         <div className="flex items-center gap-3">
-          {/* Speak button */}
-          <SpeakButton line={line} />
+          {/* TTS + Mic */}
+          <PronunciationButtons line={line} onResult={setResult} />
           {/* Toggle translation */}
           {line.is_translated && line.language !== 'en' && (
             <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
@@ -295,11 +344,6 @@ function PracticeCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen }
         )}
       </AnimatePresence>
 
-      {/* Emotion */}
-      <div className="flex items-center gap-1.5 mt-1">
-        <div className="w-1 h-1 rounded-full" style={{ background: emotion.color }} />
-        <span className="text-xs capitalize" style={{ color: `${emotion.color}80` }}>{emotion.label}</span>
-      </div>
 
       {/* Cultural note panel */}
       <AnimatePresence>
