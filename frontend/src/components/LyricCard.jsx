@@ -161,10 +161,10 @@ function ReadingCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen })
         {line.line}
       </p>
       {line.romanized && (
-        <p className="text-xs italic mb-1.5" style={{ color: '#52525b' }}>{line.romanized}</p>
+        <p className="text-xs italic mb-1.5" style={{ color: '#8888aa' }}>{line.romanized}</p>
       )}
       {line.is_translated && line.language !== 'en' && (
-        <p className="text-sm" style={{ color: '#71717a' }}>{line.translation}</p>
+        <p className="text-sm" style={{ color: '#9ca3af' }}>{line.translation}</p>
       )}
 
       <div className="flex items-center justify-between mt-3">
@@ -236,7 +236,7 @@ function PracticeCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen }
           </span>
           {/* Original text (secondary) */}
           {hasRoman && (
-            <span className="text-xs" style={{ color: '#3a3a52', fontFamily: "'Noto Sans KR', sans-serif" }}>
+            <span className="text-xs" style={{ color: '#6b7280', fontFamily: "'Noto Sans KR', sans-serif" }}>
               {line.line}
             </span>
           )}
@@ -272,7 +272,7 @@ function PracticeCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen }
       <p className="leading-relaxed font-medium mb-2"
         style={{
           color: '#f0f0ff',
-          fontSize: '1.25rem',
+          fontSize: '1.35rem',
           letterSpacing: '0.02em',
           wordSpacing: '0.1em',
           fontFamily: 'Inter, sans-serif',
@@ -288,7 +288,7 @@ function PracticeCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen }
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             className="text-xs mb-2 overflow-hidden"
-            style={{ color: '#4b4b6b' }}
+            style={{ color: '#9ca3af' }}
           >
             {line.translation}
           </motion.p>
