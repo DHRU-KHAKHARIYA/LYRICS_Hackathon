@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #030309;
+  color: #e8e8f0;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.35); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(124, 58, 237, 0.6); }
+
+/* Orb animations */
+@keyframes aurora {
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(40px, -30px) scale(1.06); }
+  66%  { transform: translate(-25px, 15px) scale(0.96); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+@keyframes aurora2 {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(-50px, 35px) scale(1.09); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes waveform {
+  0%, 100% { transform: scaleY(0.4); }
+  50%       { transform: scaleY(1); }
+}
+
+.orb-1 { animation: aurora  15s ease-in-out infinite; }
+.orb-2 { animation: aurora2 20s ease-in-out infinite; }
+.orb-3 { animation: aurora  25s ease-in-out infinite reverse; }
+
+.vinyl      { animation: spin-slow 8s linear infinite; }
+.vinyl-paused { animation-play-state: paused; }
+
+/* Reusable utility classes */
+.gradient-text {
+  background: linear-gradient(135deg, #a78bfa, #ec4899, #f97316);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.glass {
+  background: rgba(12, 12, 24, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.section-divider {
+  background: linear-gradient(90deg, transparent, rgba(124, 58, 237, 0.45), transparent);
+  height: 1px;
+  flex: 1;
+}
