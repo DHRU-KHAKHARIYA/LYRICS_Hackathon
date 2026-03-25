@@ -1,6 +1,98 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { useState } from 'react'
-import { Info, ChevronDown, Eye, EyeOff } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { Info, ChevronDown, Eye, EyeOff, Volume2, Square } from 'lucide-react'
+
+// Maps our language codes to BCP-47 locale for SpeechSynthesis
+const SPEECH_LANG = {
+  ko:    'ko-KR',
+  ja:    'ja-JP',
+  zh:    'zh-CN',
+  en:    'en-US',
+  mixed: null,   // determined at runtime
+}
+
+function useSpeech() {
+  const [speaking, setSpeaking] = useState(false)
+
+  const speak = useCallback((text, lang) => {
+    if (!window.speechSynthesis) return
+    window.speechSynthesis.cancel()
+
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang  = lang
+    utterance.rate  = 0.85   // slightly slower for learning
+    utterance.pitch = 1
+
+    utterance.onstart = () => setSpeaking(true)
+    utterance.onend   = () => setSpeaking(false)
+    utterance.onerror = () => setSpeaking(false)
+
+    window.speechSynthesis.speak(utterance)
+    setSpeaking(true)
+  }, [])
+
+  const stop = useCallback(() => {
+    window.speechSynthesis.cancel()
+    setSpeaking(false)
+  }, [])
+
+  return { speaking, speak, stop }
+}
+
+function SpeakButton({ line }) {
+  const { speaking, speak, stop } = useSpeech()
+
+  // Decide what text to speak and in which language
+  const getLangAndText = () => {
+    const lang = line.language
+    if (lang === 'en')    return { text: line.line,      locale: 'en-US' }
+    if (lang === 'ko')    return { text: line.line,      locale: 'ko-KR' }
+    if (lang === 'ja')    return { text: line.line,      locale: 'ja-JP' }
+    if (lang === 'zh')    return { text: line.line,      locale: 'zh-CN' }
+    if (lang === 'mixed') {
+      // For mixed lines, speak the full line guessing dominant lang from romanization
+      return { text: line.line, locale: 'ko-KR' }
+    }
+    return null
+  }
+
+  const payload = getLangAndText()
+  if (!payload) return null   // unknown lang — hide button
+
+  function handleClick(e) {
+    e.stopPropagation()
+    if (speaking) { stop(); return }
+    speak(payload.text, payload.locale)
+  }
+
+  return (
+    <motion.button
+      onClick={handleClick}
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.9 }}
+      title={speaking ? 'Stop' : 'Listen to pronunciation'}
+      style={{
+        color: speaking ? '#22d3ee' : '#6b7280',
+        lineHeight: 0,
+        transition: 'color 0.2s ease',
+      }}
+    >
+      <AnimatePresence mode="wait">
+        {speaking ? (
+          <motion.span key="stop"
+            initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
+            <Square size={13} fill="#22d3ee" />
+          </motion.span>
+        ) : (
+          <motion.span key="play"
+            initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
+            <Volume2 size={13} />
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.button>
+  )
+}
 
 const EMOTION_CONFIG = {
   questioning:    { color: '#f97316', bg: 'rgba(249,115,22,0.08)',   label: 'Questioning'    },
@@ -149,7 +241,9 @@ function PracticeCard({ line, index, emotion, langBadge, noteOpen, setNoteOpen }
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Speak button */}
+          <SpeakButton line={line} />
           {/* Toggle translation */}
           {line.is_translated && line.language !== 'en' && (
             <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
