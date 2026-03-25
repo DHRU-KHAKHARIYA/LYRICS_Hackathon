@@ -28,13 +28,16 @@ def cmd_process(args: argparse.Namespace) -> None:
 
     output = result.model_dump()
 
+    json_str = json.dumps(output, ensure_ascii=False, indent=2)
+
     if args.output:
         path = Path(args.output)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(json_str, encoding="utf-8")
         print(f"Saved to {path}")
     else:
-        print(json.dumps(output, ensure_ascii=False, indent=2))
+        sys.stdout.reconfigure(encoding="utf-8")
+        print(json_str)
 
 
 def cmd_serve(_args: argparse.Namespace) -> None:
