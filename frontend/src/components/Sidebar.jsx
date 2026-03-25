@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Globe, Mic2 } from 'lucide-react'
+import { Globe, Mic2, Download } from 'lucide-react'
 import EmotionArc from './EmotionArc'
 import MemberStats from './MemberStats'
 
@@ -146,6 +146,33 @@ export default function Sidebar({ song, memberStats, arcData }) {
         </h3>
         <MemberStats members={memberStats} />
       </div>
+
+      <div className="section-divider" />
+
+      {/* Download JSON */}
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.97 }}
+        onClick={() => {
+          const json = JSON.stringify(song, null, 2)
+          const blob = new Blob([json], { type: 'application/json' })
+          const url  = URL.createObjectURL(blob)
+          const a    = document.createElement('a')
+          a.href     = url
+          a.download = `${song.title} - ${song.artist}.json`
+          a.click()
+          URL.revokeObjectURL(url)
+        }}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
+        style={{
+          background: 'rgba(124,58,237,0.08)',
+          border: '1px solid rgba(124,58,237,0.2)',
+          color: '#a78bfa',
+        }}
+      >
+        <Download size={13} />
+        Download JSON
+      </motion.button>
 
     </div>
   )

@@ -46,6 +46,7 @@ function PronunciationButtons({ line, onResult }) {
   const { speaking, speak, stop } = useSpeech()
   const [phase, setPhase]   = useState('idle')   // idle | listening | done
   const [score, setScore]   = useState(null)
+  const [recRef, setRecRef] = useState(null)
 
   if (!locale) return null
 
@@ -55,29 +56,36 @@ function PronunciationButtons({ line, onResult }) {
     speak(line.line, locale)
   }
 
+  function handleStopMic(e) {
+    e.stopPropagation()
+    if (recRef) { recRef.stop(); setRecRef(null) }
+    setPhase('idle')
+  }
+
   function handleMic(e) {
     e.stopPropagation()
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { alert('Speech recognition not supported. Use Chrome or Edge.'); return }
 
-    stop()   // stop TTS if playing
+    stop()
     const rec = new SR()
-    rec.lang        = locale
+    rec.lang           = locale
     rec.interimResults = false
     rec.maxAlternatives = 1
 
     setPhase('listening')
+    setRecRef(rec)
 
     rec.onresult = (event) => {
       const heard = event.results[0][0].transcript
-      const expected = line.line
-      const sc = similarity(heard, expected)
+      const sc = similarity(heard, line.line)
       setScore(sc)
       setPhase('done')
+      setRecRef(null)
       onResult(sc)
     }
-    rec.onerror = () => setPhase('idle')
-    rec.onend   = () => { if (phase === 'listening') setPhase('idle') }
+    rec.onerror = () => { setPhase('idle'); setRecRef(null) }
+    rec.onend   = () => setRecRef(null)
     rec.start()
   }
 
@@ -110,10 +118,13 @@ function PronunciationButtons({ line, onResult }) {
         </motion.button>
       )}
       {phase === 'listening' && (
-        <motion.div animate={{ scale: [1, 1.2, 1], color: ['#ef4444', '#f97316', '#ef4444'] }}
-          transition={{ duration: 0.8, repeat: Infinity }} style={{ lineHeight: 0, color: '#ef4444' }}>
+        <motion.button onClick={handleStopMic} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+          title="Stop recording"
+          animate={{ scale: [1, 1.2, 1], color: ['#ef4444', '#f97316', '#ef4444'] }}
+          transition={{ duration: 0.8, repeat: Infinity }}
+          style={{ lineHeight: 0, color: '#ef4444' }}>
           <MicOff size={13} />
-        </motion.div>
+        </motion.button>
       )}
 
       {/* Score + reset */}
